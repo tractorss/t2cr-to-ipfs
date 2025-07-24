@@ -1,6 +1,6 @@
+import { TokenInfo } from '@uniswap/token-lists'
 import { ethers } from 'ethers'
 import fetch from 'node-fetch'
-import { TokenInfo } from '@uniswap/token-lists'
 
 export interface Prop {
   label: string
@@ -8,13 +8,16 @@ export interface Prop {
 }
 
 export interface Item {
-  metadata : {
+  metadata: {
     props: Prop[]
   } | null
   id: string
 }
 
 const fetchTokensBatch = async (id: string): Promise<Item[]> => {
+  if (!process.env.CURATE_GRAPH_URL) {
+    throw new Error('CURATE_GRAPH_URL environment variable is not set')
+  }
   const subgraphQuery = {
     query: `
       {
@@ -34,16 +37,16 @@ const fetchTokensBatch = async (id: string): Promise<Item[]> => {
       }
     `,
   }
-  const response = await fetch(
-    'https://api.studio.thegraph.com/query/61738/legacy-curate-gnosis/version/latest',
-    {
-      method: 'POST',
-      body: JSON.stringify(subgraphQuery),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+  const response = await fetch(process.env.CURATE_GRAPH_URL, {
+    method: 'POST',
+    body: JSON.stringify(subgraphQuery),
+    headers: {
+      'Content-Type': 'application/json',
+      ...(process.env.GRAPH_API_KEY
+        ? { Authorization: `Bearer ${process.env.GRAPH_API_KEY}` }
+        : {}),
     },
-  )
+  })
 
   const { data } = await response.json()
   const tags: Item[] = data.litems
@@ -86,19 +89,22 @@ export default async function getTokens(): Promise<TokenInfo[]> {
 
   const tokens: Map<string, TokenInfo> = new Map()
   for (const token of tokensFromSubgraph) {
-    const caipAddress = token?.metadata?.props.find((p) => p.label === 'Address')
+    const caipAddress = token?.metadata?.props.find(
+      (p) => p.label === 'Address',
+    )?.value as string
+    const name = token?.metadata?.props.find((p) => p.label === 'Name')
       ?.value as string
-    const name = token?.metadata?.props.find((p) => p.label === 'Name')?.value as string
     const symbol = token?.metadata?.props.find((p) => p.label === 'Symbol')
       ?.value as string
-    const logo = token?.metadata?.props.find((p) => p.label === 'Logo')?.value as string
+    const logo = token?.metadata?.props.find((p) => p.label === 'Logo')
+      ?.value as string
     const decimals = token?.metadata?.props.find((p) => p.label === 'Decimals')
       ?.value as string
 
     if (!caipAddress || !name || !symbol || !decimals) {
       continue
     }
-    
+
     const [namespace] = caipAddress.split(':')
     if (namespace !== 'eip155') {
       nonEvmTokens.push(caipAddress)
