@@ -35,6 +35,9 @@ const fetchTokensBatch = async (id: string): Promise<Item[]> => {
   const response = await fetch(process.env.CURATE_GRAPH_URL, {
     method: 'POST',
     body: JSON.stringify(subgraphQuery),
+    headers: {
+      'Content-Type': 'application/json',
+    },
   })
 
   const { data } = await response.json()
